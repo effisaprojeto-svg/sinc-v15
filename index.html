@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SINC v18 - Sistema Industrial Cloud</title>
+    <style>
+        :root {
+            --primary: #2c3e50; --secondary: #27ae60; --danger: #e74c3c;
+            --warning: #f39c12; --info: #3498db; --bg: #f4f7f6; --white: #ffffff;
+        }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); color: #333; }
+        
+        /* Login UI */
+        #loginPage { display: flex; justify-content: center; align-items: center; height: 100vh; background: var(--primary); }
+        .login-card { background: white; padding: 40px; border-radius: 8px; width: 320px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        
+        /* Nav & Layout */
+        nav { background: var(--primary); color: white; padding: 1rem; display: none; gap: 15px; position: sticky; top: 0; z-index: 100; align-items: center; }
+        nav span { cursor: pointer; font-weight: bold; padding: 8px 15px; border-radius: 4px; }
+        nav .active { background: var(--secondary); }
+        .container { display: none; padding: 20px; animation: fadeIn 0.4s; }
+        .container.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        /* Regra de Suprimentos: Cor Vermelha para itens defasados */
+        .defasado { color: var(--danger) !important; font-weight: bold; background-color: #fff5f5; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { padding: 12px; border: 1px solid #eee; text-align: left; }
+        th { background: #f8f9fa; }
+
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; box-sizing: border-box; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-save { background: var(--secondary); color: white; }
+        .btn-edit { background: var(--warning); color: white; }
+    </style>
+</head>
+<body>
+
+<div id="loginPage">
+    <div class="login-card">
+        <h2>SINC Cloud</h2>
+        <input type="email" id="email" placeholder="E-mail">
+        <input type="password" id="pass" placeholder="Senha">
+        <button class="btn-save" style="width:100%" onclick="app.login()">Entrar</button>
+        <p id="loginError" style="color:var(--danger); display:none; font-size:0.8em; margin-top:10px;">Acesso Negado</p>
+    </div>
+</div>
+
+<nav id="mainNav">
+    <span id="nav-base" onclick="app.showPage('base')">Setor Orçamentos (Base)</span>
+    <span id="nav-trabalho" class="active" onclick="app.showPage('trabalho')">Painel de Trabalho</span>
+    <span id="nav-historico" onclick="app.showPage('historico')">Histórico e Filtros</span>
+    <div style="margin-left:auto"><button onclick="app.logout()" style="background:transparent; color:white;">Sair</button></div>
+</nav>
+
+<div id="page-base" class="container">
+    <div class="card" id="areaSuprimentos" style="display:none">
+        <h3>Cadastro de Itens (Apenas Orçamentista)</h3>
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px;">
+            <input type="text" id="baseNome" placeholder="Nome do Item">
+            <select id="baseTipo"><option value="E">E (Equipamento)</option><option value="O">O (Opcional)</option></select>
+            <input type="number" id="baseMP" placeholder="Custo MP">
+            <input type="number" id="baseMO" placeholder="Custo MO">
+            <button class="btn-save" onclick="app.saveBaseItem()">Gravar na Base</button>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Itens Cadastrados (Vermelho = +3 meses sem atualizar)</h3>
+        <table id="tableBase">
+            <thead><tr><th>Item</th><th>Tipo</th><th>MP</th><th>Última Atualização</th><th>Ações</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="page-trabalho" class="container active">
+    <div class="card">
+        <h2>Novo Orçamento</h2>
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <input type="text" id="cliente" placeholder="Cliente">
+            <input type="text" id="layout" placeholder="Nº Layout">
+            <select id="status"><option>🟡 Aguardando Custo</option><option>🟢 Aprovado</option></select>
+        </div>
+        <button class="btn-save" style="width:100%; padding:15px;">Salvar e Registrar Alterações</button>
+    </div>
+</div>
+
+<div id="page-historico" class="container">
+    <div class="card">
+        <h3>Histórico de Projetos</h3>
+        <select onchange="app.filterHistorico(this.value)" style="width:200px;">
+            <option value="Todos">Todos os Status</option>
+            <option value="Aguardando Custo">Aguardando Custo</option>
+            <option value="Aprovado">Aprovado</option>
+        </select>
+        <table id="tableHistorico">
+            <thead><tr><th>Data</th><th>Cliente</th><th>Layout</th><th>Status</th><th>Total</th><th>Ação</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBD8XA_ZDkRRX431SqD6uAEfCl6kwMGUa4",
+        authDomain: "sinc-industrial-8065e.firebaseapp.com",
+        projectId: "sinc-industrial-8065e",
+        storageBucket: "sinc-industrial-8065e.firebasestorage.app",
+        messagingSenderId: "811364806840",
+        appId: "1:811364806840:web:22399bec85e44ba74b444d"
+    };
+
+    const appFirebase = initializeApp(firebaseConfig);
+    const auth = getAuth(appFirebase);
+    const db = getFirestore(appFirebase);
+
+    const app = {
+        currentUser: null,
+
+        init() {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    this.currentUser = { email: user.email, perfil: user.email.includes('admin') ? 'ORCAMENTISTA' : 'VENDEDOR' };
+                    document.getElementById('loginPage').style.display = 'none';
+                    document.getElementById('mainNav').style.display = 'flex';
+                    if(this.currentUser.perfil === 'ORCAMENTISTA') document.getElementById('areaSuprimentos').style.display = 'block';
+                    this.loadBase();
+                } else {
+                    document.getElementById('loginPage').style.display = 'flex';
+                    document.getElementById('mainNav').style.display = 'none';
+                }
+            });
+        },
+
+        async login() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('pass').value;
+            try { await signInWithEmailAndPassword(auth, email, pass); } 
+            catch { document.getElementById('loginError').style.display = 'block'; }
+        },
+
+        logout() { signOut(auth); },
+
+        showPage(p) {
+            document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('nav span').forEach(s => s.classList.remove('active'));
+            document.getElementById('page-'+p).classList.add('active');
+            document.getElementById('nav-'+p).classList.add('active');
+        },
+
+        async saveBaseItem() {
+            const item = {
+                nome: document.getElementById('baseNome').value,
+                tipo: document.getElementById('baseTipo').value,
+                mp: parseFloat(document.getElementById('baseMP').value) || 0,
+                mo: parseFloat(document.getElementById('baseMO').value) || 0,
+                ultimaAtualizacao: new Date().toISOString()
+            };
+            await addDoc(collection(db, "baseItens"), item);
+            this.loadBase();
+        },
+
+        async loadBase() {
+            const q = query(collection(db, "baseItens"), orderBy("nome"));
+            const snap = await getDocs(q);
+            const tbody = document.querySelector("#tableBase tbody");
+            tbody.innerHTML = "";
+            
+            snap.forEach(d => {
+                const item = d.data();
+                const dataAtu = new Date(item.ultimaAtualizacao);
+                const isDefasado = (new Date() - dataAtu) > (90 * 24 * 60 * 60 * 1000); // 3 meses
+
+                tbody.innerHTML += `
+                    <tr class="${isDefasado ? 'defasado' : ''}">
+                        <td>${item.nome} ${isDefasado ? '⚠️' : ''}</td>
+                        <td>${item.tipo}</td>
+                        <td>${item.mp.toFixed(2)}</td>
+                        <td>${dataAtu.toLocaleDateString()}</td>
+                        <td>${this.currentUser.perfil === 'ORCAMENTISTA' ? '<button class="btn-edit">Editar</button>' : '🔒'}</td>
+                    </tr>`;
+            });
+        }
+    };
+
+    window.app = app;
+    app.init();
+</script>
+</body>
+</html>
