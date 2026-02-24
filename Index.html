@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SINC v17 - Industrial Cloud</title>
+    
+    <style>
+        :root {
+            --primary: #2c3e50; --secondary: #27ae60; --danger: #e74c3c;
+            --warning: #f39c12; --info: #3498db; --bg: #f4f7f6; --white: #ffffff;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); color: #333; }
+        
+        /* LOGIN */
+        #loginPage { display: flex; justify-content: center; align-items: center; height: 100vh; background: var(--primary); }
+        .login-card { background: white; padding: 40px; border-radius: 8px; width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center; }
+        
+        /* NAV */
+        nav { background: var(--primary); color: white; padding: 1rem; display: none; gap: 15px; position: sticky; top: 0; z-index: 100; align-items: center; }
+        nav span { cursor: pointer; font-weight: bold; padding: 8px 15px; border-radius: 4px; transition: 0.3s; }
+        nav .active { background: var(--secondary); }
+        .user-info { margin-left: auto; font-size: 0.85em; opacity: 0.8; }
+
+        /* CONTAINERS */
+        .container { display: none; padding: 20px; animation: fadeIn 0.4s; }
+        .container.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .card { background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        /* TABELAS E CORES */
+        table { width: 100%; border-collapse: collapse; background: white; font-size: 0.9em; }
+        th, td { padding: 12px; border: 1px solid #eee; text-align: left; }
+        th { background: #f8f9fa; color: var(--primary); }
+        
+        .defasado { color: var(--danger) !important; font-weight: bold; background-color: #fff5f5; }
+        .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
+        
+        /* INPUTS */
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-save { background: var(--secondary); color: white; }
+        .btn-del { background: var(--danger); color: white; }
+    </style>
+</head>
+<body>
+
+<div id="loginPage">
+    <div class="login-card">
+        <h2 style="color: var(--primary)">SINC Industrial</h2>
+        <p>Acesse o painel de custos</p>
+        <input type="email" id="loginEmail" placeholder="E-mail">
+        <input type="password" id="loginPass" placeholder="Senha">
+        <button class="btn-save" style="width: 100%" onclick="appControl.handleLogin()">Entrar</button>
+        <p id="loginError" style="color: var(--danger); font-size: 0.8em; margin-top: 10px; display: none;">Credenciais Inválidas</p>
+    </div>
+</div>
+
+<nav id="mainNav">
+    <span id="nav-base" onclick="appControl.showPage('base')">Base (Suprimentos)</span>
+    <span id="nav-trabalho" class="active" onclick="appControl.showPage('trabalho')">Novo Orçamento</span>
+    <span id="nav-historico" onclick="appControl.showPage('historico')">Histórico</span>
+    <span id="nav-admin" style="display:none" onclick="appControl.showPage('admin')">Usuários</span>
+    <div class="user-info"><span id="userDisplay"></span> | <a href="#" onclick="appControl.handleLogout()" style="color: white">Sair</a></div>
+</nav>
+
+<div id="page-base" class="container">
+    <div class="card" id="formBase" style="display:none">
+        <h3>Cadastro de Itens e Custos</h3>
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end;">
+            <div><label>Nome</label><input type="text" id="baseNome"></div>
+            <div><label>Tipo</label><select id="baseTipo"><option value="E">Equipamento (E)</option><option value="O">Opcional (O)</option></select></div>
+            <div><label>MP</label><input type="number" id="baseMP"></div>
+            <div><label>MO</label><input type="number" id="baseMO"></div>
+            <div><label>Elet</label><input type="number" id="baseElet"></div>
+            <button class="btn-save" onclick="appControl.saveBaseItem()">Salvar Item</button>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Lista de Itens (Suprimentos)</h3>
+        <table id="tableBase">
+            <thead><tr><th>Item</th><th>Tipo</th><th>MP</th><th>MO</th><th>Elet</th><th>Última Atu.</th><th>Ação</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="page-trabalho" class="container active">
+    <div class="card">
+        <h2>Montagem de Layout Cloud</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div><label>Cliente</label><input type="text" id="orcCliente"></div>
+            <div><label>Nº Layout</label><input type="text" id="orcLayout"></div>
+        </div>
+        <p>Selecione os itens da base sincronizada abaixo para compor o orçamento.</p>
+        <button class="btn-save" style="width:100%; padding: 15px;">Gravar Orçamento no Cloud</button>
+    </div>
+</div>
+
+<div id="page-admin" class="container">
+    <div class="card">
+        <h2>Gestão de Usuários (Admin)</h2>
+        <div style="display: flex; gap: 10px;">
+            <input type="email" id="newUserEmail" placeholder="E-mail do novo usuário">
+            <select id="newUserPerfil">
+                <option value="VENDEDOR">Vendedor (Só Orçamenta)</option>
+                <option value="ORCAMENTISTA">Orçamentista (Edita Custos)</option>
+            </select>
+            <button class="btn-save" onclick="appControl.createUser()">Criar Usuário</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBD8XA_ZDkRRX431SqD6uAEfCl6kwMGUa4",
+        authDomain: "sinc-industrial-8065e.firebaseapp.com",
+        projectId: "sinc-industrial-8065e",
+        storageBucket: "sinc-industrial-8065e.firebasestorage.app",
+        messagingSenderId: "811364806840",
+        appId: "1:811364806840:web:22399bec85e44ba74b444d"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Módulo de Controle da Aplicação
+    const appControl = {
+        user: null,
+        baseItens: [],
+
+        init() {
+            onAuthStateChanged(auth, (u) => {
+                if (u) {
+                    this.user = { email: u.email, perfil: u.email === 'admin@empresa.com' ? 'ADMIN' : 'ORCAMENTISTA' }; 
+                    document.getElementById('loginPage').style.display = 'none';
+                    document.getElementById('mainNav').style.display = 'flex';
+                    document.getElementById('userDisplay').innerText = u.email;
+                    
+                    if(this.user.perfil === 'ADMIN') document.getElementById('nav-admin').style.display = 'inline';
+                    if(this.user.perfil === 'ADMIN' || this.user.perfil === 'ORCAMENTISTA') document.getElementById('formBase').style.display = 'block';
+                    
+                    this.loadBase();
+                } else {
+                    document.getElementById('loginPage').style.display = 'flex';
+                    document.getElementById('mainNav').style.display = 'none';
+                }
+            });
+        },
+
+        async handleLogin() {
+            const e = document.getElementById('loginEmail').value;
+            const p = document.getElementById('loginPass').value;
+            try { await signInWithEmailAndPassword(auth, e, p); } 
+            catch (err) { document.getElementById('loginError').style.display = 'block'; }
+        },
+
+        handleLogout() { signOut(auth); },
+
+        showPage(p) {
+            document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('nav span').forEach(s => s.classList.remove('active'));
+            document.getElementById('page-' + p).classList.add('active');
+            document.getElementById('nav-' + p).classList.add('active');
+        },
+
+        async saveBaseItem() {
+            const item = {
+                nome: document.getElementById('baseNome').value,
+                tipo: document.getElementById('baseTipo').value,
+                mp: parseFloat(document.getElementById('baseMP').value) || 0,
+                mo: parseFloat(document.getElementById('baseMO').value) || 0,
+                elet: parseFloat(document.getElementById('baseElet').value) || 0,
+                ultimaAtualizacao: new Date().toISOString()
+            };
+            await addDoc(collection(db, "baseItens"), item);
+            this.loadBase();
+        },
+
+        async loadBase() {
+            const q = query(collection(db, "baseItens"), orderBy("nome"));
+            const snap = await getDocs(q);
+            const tbody = document.querySelector("#tableBase tbody");
+            tbody.innerHTML = "";
+            
+            snap.forEach(docSnap => {
+                const data = docSnap.data();
+                const diff = new Date() - new Date(data.ultimaAtualizacao);
+                const isDefasado = diff > (90 * 24 * 60 * 60 * 1000); // 3 meses
+
+                tbody.innerHTML += `
+                    <tr class="${isDefasado ? 'defasado' : ''}">
+                        <td>${data.nome} ${isDefasado ? '⚠️' : ''}</td>
+                        <td>${data.tipo}</td>
+                        <td>${data.mp.toFixed(2)}</td>
+                        <td>${data.mo.toFixed(2)}</td>
+                        <td>${data.elet.toFixed(2)}</td>
+                        <td>${new Date(data.ultimaAtualizacao).toLocaleDateString()}</td>
+                        <td>${this.user.perfil !== 'VENDEDOR' ? '<button class="btn-save">Edit</button>' : '🔒'}</td>
+                    </tr>
+                `;
+            });
+        }
+    };
+
+    window.appControl = appControl;
+    appControl.init();
+</script>
+</body>
+</html>
